@@ -1,0 +1,30 @@
+{
+  "id": "zhiyun-finance-studio",
+  "name": "智能财务中心",
+  "version": "0.1.0",
+  "type": "app",
+  "description": "基于真实发票与财务数据完成报销智能审核、财务比率看板和原材料价格变动下的成本预测。",
+  "author": "Zhiyun AI",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "ui/index.js"
+  },
+  "dependencies": [],
+  "qwenpaw_version": {
+    "min": "2.1.0",
+    "max": "2.2.0"
+  },
+  "meta": {
+    "pawapp": {
+      "icon": "💹",
+      "category": "finance",
+      "entry_page": "/apps/zhiyun-finance-studio",
+      "launch_scope": "page"
+    },
+    "permissions": {
+      "chat": true,
+      "storage": true
+    },
+    "requires": ["zhiyun-data-core>=0.1.0"]
+  }
+}
