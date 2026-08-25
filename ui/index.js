@@ -208,7 +208,7 @@
 
   function AppHeader(props) {
     return h("div", { className: "zy-topbar" },
-      h("div", { className: "zy-monogram" }, "销售"),
+      h("div", { className: "zy-monogram" }, "财务"),
       h("div", { style: { flex: 1, minWidth: 0 } },
         h("div", { className: "zy-topbar-title" }, APP_TITLE),
         h("div", { className: "zy-topbar-sub" }, APP_SUBTITLE)
@@ -537,7 +537,7 @@
         setAgentMessages(function (prev) { var next = prev.slice(); next[next.length - 1] = { role: "bot", text: value, card: null }; return next; });
       }
       var full = "";
-      Q.host.fetch("/zhiyun-sales-studio/agent/chat", {
+      Q.host.fetch(APP + "/agent/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text, session_id: agentSessionRef.current, user_id: "default", history: history })
