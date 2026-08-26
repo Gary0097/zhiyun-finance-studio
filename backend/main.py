@@ -24,7 +24,7 @@ except ImportError:
     from finance_workflow import FinanceWorkflowStore
 
 router = APIRouter()
-PLUGIN_VERSION = "0.2.1"
+PLUGIN_VERSION = "0.2.2"
 
 
 def _store() -> FinanceWorkflowStore:
