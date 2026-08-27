@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
-import sys
+import os
 import sqlite3
+import sys
+import time
 from pathlib import Path
 from typing import Any, AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 from qwenpaw.plugins.api import PluginApi
 
@@ -27,8 +32,23 @@ except ImportError:
     from finance_engine import analyze_financials, audit_expenses, forecast_cost
     from finance_workflow import FinanceWorkflowStore
 
+
+
+# ==== 统一登录鉴权：与 zhiyun-auth 相同的 HMAC Token 本地校验（PRD §15 / §17.16） ====
+try:
+    from .auth_guard import _verify_token_user
+except ImportError:  # pragma: no cover
+    from auth_guard import _verify_token_user
+
+
+def require_auth(authorization: str = Header(default="")) -> None:
+    """所有业务端点统一要求有效登录令牌；/health 保持开放供探活。"""
+    if _verify_token_user(authorization) is None:
+        raise HTTPException(status_code=401, detail="登录已失效，请重新登录")
+
+
 router = APIRouter()
-PLUGIN_VERSION = "0.3.0"
+PLUGIN_VERSION = "0.4.0"
 
 
 def _store() -> FinanceWorkflowStore:
@@ -61,7 +81,7 @@ async def health() -> dict[str, Any]:
     return {"status": "available", "version": PLUGIN_VERSION}
 
 
-@router.post("/expense/audit")
+@router.post("/expense/audit", dependencies=[Depends(require_auth)])
 async def expense_audit(request: InvoicesRequest) -> dict[str, Any]:
     try:
         return audit_expenses(request.invoices)
@@ -69,7 +89,7 @@ async def expense_audit(request: InvoicesRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/finance/analyze")
+@router.post("/finance/analyze", dependencies=[Depends(require_auth)])
 async def finance_analyze(request: FinancialRecordsRequest) -> dict[str, Any]:
     try:
         return analyze_financials(request.records)
@@ -77,7 +97,7 @@ async def finance_analyze(request: FinancialRecordsRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/cost/forecast")
+@router.post("/cost/forecast", dependencies=[Depends(require_auth)])
 async def cost_forecast(request: CostRequest) -> dict[str, Any]:
     try:
         return forecast_cost(request.parameters)
@@ -85,7 +105,7 @@ async def cost_forecast(request: CostRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/artifacts/expense")
+@router.post("/artifacts/expense", dependencies=[Depends(require_auth)])
 async def create_expense_artifact(request: InvoicesRequest) -> dict[str, Any]:
     try:
         payload = audit_expenses(request.invoices)
@@ -96,7 +116,7 @@ async def create_expense_artifact(request: InvoicesRequest) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=f"财务持久化依赖不可用：{exc}") from exc
 
 
-@router.post("/artifacts/finance")
+@router.post("/artifacts/finance", dependencies=[Depends(require_auth)])
 async def create_finance_artifact(request: FinancialRecordsRequest) -> dict[str, Any]:
     try:
         payload = analyze_financials(request.records)
@@ -107,7 +127,7 @@ async def create_finance_artifact(request: FinancialRecordsRequest) -> dict[str,
         raise HTTPException(status_code=503, detail=f"财务持久化依赖不可用：{exc}") from exc
 
 
-@router.post("/artifacts/cost")
+@router.post("/artifacts/cost", dependencies=[Depends(require_auth)])
 async def create_cost_artifact(request: CostRequest) -> dict[str, Any]:
     try:
         payload = forecast_cost(request.parameters)
@@ -118,7 +138,7 @@ async def create_cost_artifact(request: CostRequest) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=f"财务持久化依赖不可用：{exc}") from exc
 
 
-@router.get("/artifacts")
+@router.get("/artifacts", dependencies=[Depends(require_auth)])
 async def list_artifacts(kind: str | None = None, limit: int = 100) -> dict[str, Any]:
     try:
         return _store().list_artifacts(kind, limit)
@@ -126,7 +146,7 @@ async def list_artifacts(kind: str | None = None, limit: int = 100) -> dict[str,
         raise HTTPException(status_code=503, detail=f"财务持久化依赖不可用：{exc}") from exc
 
 
-@router.get("/artifacts/{artifact_id}")
+@router.get("/artifacts/{artifact_id}", dependencies=[Depends(require_auth)])
 async def get_artifact(artifact_id: str) -> dict[str, Any]:
     try:
         return _store().get_artifact(artifact_id)
@@ -134,7 +154,7 @@ async def get_artifact(artifact_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="财务工件不存在") from exc
 
 
-@router.post("/artifacts/{artifact_id}/reviews")
+@router.post("/artifacts/{artifact_id}/reviews", dependencies=[Depends(require_auth)])
 async def review_artifact(artifact_id: str, request: ArtifactReviewRequest) -> dict[str, Any]:
     try:
         return _store().review_artifact(artifact_id, request.action, request.reviewer, request.note)
@@ -144,7 +164,7 @@ async def review_artifact(artifact_id: str, request: ArtifactReviewRequest) -> d
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.get("/artifacts/{artifact_id}/export")
+@router.get("/artifacts/{artifact_id}/export", dependencies=[Depends(require_auth)])
 async def export_artifact(artifact_id: str) -> Response:
     try:
         content, media_type = _store().export_artifact(artifact_id)
@@ -219,7 +239,7 @@ def _build_input(body: AgentChatRequest) -> list[dict[str, Any]]:
     return input_messages
 
 
-@router.post("/agent/chat")
+@router.post("/agent/chat", dependencies=[Depends(require_auth)])
 async def agent_chat(body: AgentChatRequest) -> StreamingResponse:
     """Proxy a user message to the real console chat and stream its SSE reply."""
     session_id = body.session_id or f"zhiyun-finance-studio-{uuid4().hex}"
