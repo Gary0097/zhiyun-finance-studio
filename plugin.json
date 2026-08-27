@@ -1,7 +1,7 @@
 {
   "id": "zhiyun-finance-studio",
   "name": "智能财务中心",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "type": "app",
   "description": "基于真实发票与财务数据完成报销智能审核、财务比率看板和原材料价格变动下的成本预测。",
   "author": "Zhiyun AI",
